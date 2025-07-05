@@ -1,6 +1,6 @@
 from moviepy import VideoFileClip, TextClip, CompositeVideoClip, ImageClip
 from moviepy.video.fx import FadeIn, FadeOut
-from stt import runner
+from stt.fasterwhispher import FasterWhispherSTTProcessor
 import common
 from custom_logger import logger_config
 from typing import List, Dict, Tuple, Optional
@@ -26,8 +26,8 @@ class CaptionCreator:
 		
 		Args:
 			video_path (str): Path to the input video file
-            config (Optional[CaptionConfig]): A single configuration object.
-                                              If None, default settings are used.
+            config (Optional[Config]): A single configuration object.
+                                       If None, default settings are used.
 		"""
 		self.video_path = os.path.abspath(video_path)
 		self.config = config or Config()
@@ -44,8 +44,8 @@ class CaptionCreator:
 		"""Load video file and extract word timestamps."""
 		try:
 			self.video = VideoFileClip(self.video_path)
-			result = runner.initiate({"model": "fasterwhispher", "input": self.video_path})
-			self.word_timestamps = result["segments"]["word"]
+			with FasterWhispherSTTProcessor() as STT:
+				self.word_timestamps = STT.transcribe({"model": "fasterwhispher", "input": self.video_path})["segments"]["word"]
 			
 			logger_config.info(f"Video loaded successfully")
 			logger_config.info(f"Video duration: {self.video.duration:.2f} seconds")
@@ -91,67 +91,36 @@ class CaptionCreator:
 		
 		return start_time, end_time, duration
 	
-	def _create_animated_text_clip(self, word: str, start_time: float, duration: float) -> TextClip:
+	def _create_text_clip(self, 
+						  words_data: List[Dict], 
+						  highlight_word_index: int, 
+						  start_time: float, 
+						  duration: float,
+						  group_start_index: int = 0) -> ImageClip:
 		"""
-		Create an animated text clip with effects.
+		Create a text clip with single word or grouped words and highlighting.
 		
 		Args:
-			word (str): The word to display
-			start_time (float): When to start displaying the word
-			duration (float): How long to display the word
+			words_data (List[Dict]): List of word data dictionaries
+			highlight_word_index (int): Index of the current word to highlight
+			start_time (float): When to start displaying
+			duration (float): How long to display
+			group_start_index (int): Starting index of the group (for grouped mode)
 			
 		Returns:
-			TextClip: The animated text clip
-		"""
-		# Create the base text clip
-		txt_clip = TextClip(
-			text=word,
-			font_size=self.config.font_size,
-			color=self.config.text_color,
-			font=self.font_path,
-			stroke_color=self.config.stroke_color,
-			stroke_width=self.config.stroke_width,
-			method="caption",
-			size=self.video.size,
-			text_align=self.config.vertical_align
-		)
-		
-		# Set timing and position
-		txt_clip = (
-			txt_clip
-			.with_duration(duration)
-			.with_start(start_time)
-			.with_position('center')
-		)
-		
-		# Apply animations if requested
-		if self.config.use_fade_and_scale:
-			fade_duration = min(self.config.fade_duration, duration * 0.3)
-			
-			# Apply scaling effect
-			txt_clip = txt_clip.resized(lambda t: max(0.1, 1 + 0.15 * (1 - abs(t - duration / 2) / max(0.1, duration / 2))))
-			
-			# Apply fade effects - FIXED: Apply effects properly
-			txt_clip = txt_clip.with_effects([FadeIn(fade_duration), FadeOut(fade_duration)])
-		
-		return txt_clip
-
-	def _create_highlighted_group_clip(self, group_words_data: List[Dict], current_word_index: int, group_start_index: int, start_time: float, duration: float) -> CompositeVideoClip:
-		"""
-		Create a text clip with grouped words and current word highlighting using PIL for custom fonts.
+			ImageClip: The text clip
 		"""
 		caption_width = int(self.video.size[0] * self.config.caption_width_ratio)
-		# Prepare text with highlight
+
 		caption_parts = []
 		word_to_highlight = None
-		for j, word_data in enumerate(group_words_data):
+		for j, word_data in enumerate(words_data):
 			word = self._clean_word(word_data["word"])
-			if group_start_index + j == current_word_index:
-				# caption_parts.append((word, highlight_color))
-				caption_parts.append((word, "white"))
+			if group_start_index + j == highlight_word_index:
+				caption_parts.append((word, self.config.highlight_text_color))
 				word_to_highlight = word
 			else:
-				caption_parts.append((word, "white"))
+				caption_parts.append((word, self.config.text_color))
 		
 		# Load font
 		font = ImageFont.truetype(self.font_path, self.config.font_size)
@@ -178,7 +147,7 @@ class CaptionCreator:
 			if current_line_width + word_width > caption_width:
 				# Commit current line
 				lines.append((current_line, current_line_width, max_line_height))
-				total_height += max_line_height + 10  # line spacing
+				total_height += max_line_height + self.config.line_spacing
 				# Start new line
 				current_line = []
 				current_line_width = 0
@@ -189,7 +158,7 @@ class CaptionCreator:
 
 		if current_line:
 			lines.append((current_line, current_line_width, max_line_height))
-			total_height += max_line_height + 10
+			total_height += max_line_height + self.config.line_spacing
 
 		# Add extra padding for descenders
 		padding = int(self.config.font_size * 0.4)
@@ -202,106 +171,74 @@ class CaptionCreator:
 		# Draw lines
 		y = 0
 		for line_words, line_width, line_height in lines:
-			x = (caption_width - line_width) // 2  # Center align the entire line
+			# Center align based on horizontal_align config
+			if self.config.horizontal_align == "center":
+				x = (caption_width - line_width) // 2
+			elif self.config.horizontal_align == "left":
+				x = 0
+			else:  # right
+				x = caption_width - line_width
+				
 			for word, color, word_width in line_words:
+				# Draw background highlight if this is the word to highlight
 				if word_to_highlight == word:
-					# Draw background rectangle behind word
-					padding_x = 10  # horizontal padding
-					padding_y = 5   # vertical padding
+					padding_x, padding_y = self.config.highlight_padding
 					
-					# Use textbbox for accurate positioning on both x and y axes
+					# Use textbbox for accurate positioning
 					text_bbox = draw.textbbox((x, y), word, font=font)
-					rect_x0 = text_bbox[0] - padding_x  # Left edge of text minus padding
-					rect_y0 = text_bbox[1] - padding_y  # Top edge of text minus padding
-					rect_x1 = text_bbox[2] + padding_x  # Right edge of text plus padding
-					rect_y1 = text_bbox[3] + padding_y  # Bottom edge of text plus padding
+					rect_x0 = text_bbox[0] - padding_x
+					rect_y0 = text_bbox[1] - padding_y
+					rect_x1 = text_bbox[2] + padding_x
+					rect_y1 = text_bbox[3] + padding_y
 
 					# Draw background rectangle
 					draw.rectangle(
 						[rect_x0, rect_y0, rect_x1, rect_y1],
-						fill=self.config.highlight_bg_color  # Use the color you want for the background
+						fill=self.config.highlight_bg_color
 					)
 
 				# Draw stroke (outline) around text
 				for dx in range(-self.config.stroke_width, self.config.stroke_width + 1):
 					for dy in range(-self.config.stroke_width, self.config.stroke_width + 1):
-						draw.text((x + dx, y + dy), word, font=font, fill="black")
+						draw.text((x + dx, y + dy), word, font=font, fill=self.config.stroke_color)
 
 				# Draw the actual text
 				draw.text((x, y), word, font=font, fill=color)
 
-				x += word_width + space_width  # Move to next word
+				x += word_width + space_width
 
-			y += line_height + 10  # Move to next line
+			y += line_height + self.config.line_spacing
 
 		# Convert PIL image to MoviePy ImageClip
-		txt_clip = (ImageClip(np.array(img))
-					.with_duration(duration)
-					.with_start(start_time)
-					.with_position(("center", "center")))  # Fully centered
+		txt_clip = ImageClip(np.array(img)).with_duration(duration).with_start(start_time)
 
+		txt_clip = txt_clip.with_position((self.config.vertical_align, self.config.horizontal_align))
+		
+		# Apply animations for single word mode
+		if self.config.use_fade_and_scale:
+			fade_duration = min(self.config.fade_duration, duration * 0.3)
+			
+			# Apply scaling effect
+			txt_clip = txt_clip.resized(lambda t: max(0.1, 1 + self.config.scale_effect_intensity * (1 - abs(t - duration / 2) / max(0.1, duration / 2))))
+			
+			# Apply fade effects
+			txt_clip = txt_clip.with_effects([FadeIn(fade_duration), FadeOut(fade_duration)])
+		
 		return txt_clip
-
 	
-	def generate_word_by_word_captions(self, output_path: str) -> str:
-		"""
-		Create YouTube Shorts style captions with color-changing bold text and bounce effect.
-		Each word appears individually with animations.
-		"""
-		logger_config.info("Starting word-by-word caption generation...")
-		
-		text_clips = []
-		
-		for i, word_data in enumerate(self.word_timestamps):
-			word = word_data["word"]
-			start_time, end_time, duration = self._calculate_word_duration(i)
-			
-			# Skip if word starts after video ends
-			if start_time >= self.video.duration:
-				break
-			
-			# Skip very short words
-			if duration < 0.05:
-				continue
-			
-			# Clean and format the word
-			display_word = self._clean_word(word)
-			
-			# Create animated text clip
-			txt_clip = self._create_animated_text_clip(
-				display_word, start_time, duration
-			)
-			
-			text_clips.append(txt_clip)
-			
-			logger_config.info(f"Processed {i + 1}/{len(self.word_timestamps)} words...", overwrite=True)
-		
-		# Compose final video
-		final_clip = CompositeVideoClip([self.video] + text_clips)
-		common.write_videofile(final_clip, output_path)
-		
-		# Clean up
-		final_clip.close()
-		
-		logger_config.success(f"Word-by-word captions video saved to: {output_path}")
-		return output_path
-	
-	def generate_grouped_captions_with_highlight(self, output_path: str) -> str:
+	def generate(self) -> str:
 		"""
 		Create captions that display words in groups, highlight the current word, 
 		and wrap text to fit the video width.
-		
-		Args:
-			output_path (str): Path where the output video will be saved
-			
+
 		Returns:
 			str: Path to the generated video file
 		"""
 		logger_config.info("Starting grouped captions with highlight generation...")
 		
 		# Calculate caption width for proper text wrapping
-		caption_width = int(self.video.size[0] * 0.9)
-		logger_config.info(f"Setting caption width to {caption_width}px (90% of video width)")
+		caption_width = int(self.video.size[0] * self.config.caption_width_ratio)
+		logger_config.info(f"Setting caption width to {caption_width}px ({self.config.caption_width_ratio*100}% of video width)")
 		
 		text_clips = []
 		for i in range(len(self.word_timestamps)):
@@ -321,9 +258,13 @@ class CaptionCreator:
 			if duration <= 0:
 				continue
 			
-			# Create highlighted group clip
-			txt_clip = self._create_highlighted_group_clip(
-				group_words_data, i, group_start_index, start_time, duration
+			# Create text clip for grouped words
+			txt_clip = self._create_text_clip(
+				words_data=group_words_data,
+				highlight_word_index=i if self.config.highlight_text else -1,
+				start_time=start_time,
+				duration=duration,
+				group_start_index=group_start_index
 			)
 			
 			text_clips.append(txt_clip)
@@ -332,13 +273,13 @@ class CaptionCreator:
 		
 		# Compose final video
 		final_clip = CompositeVideoClip([self.video] + text_clips)
-		common.write_videofile(final_clip, output_path)
+		common.write_videofile(final_clip, self.config.output_path)
 		
 		# Clean up
 		final_clip.close()
 		
-		logger_config.success(f"Grouped captions video saved to: {output_path}")
-		return output_path
+		logger_config.success(f"Grouped captions video saved to: {self.config.output_path}")
+		return self.config.output_path
 	
 	def close(self) -> None:
 		"""Clean up resources."""
@@ -359,15 +300,9 @@ if __name__ == "__main__":
 	video_path = "/home/jebineinstein/git/CaptionCreator/video/SvtTCBLqqZ.mp4"
 
 	custom_config = Config()
+	custom_config.word_count = 1
+	custom_config.highlight_text = False
 
 	# Using context manager for automatic cleanup
-	with CaptionCreator(video_path) as caption_generator:
-		# Generate word-by-word captions
-		output_path= "output_word_by_word_shorts.mp4"
-		caption_generator.generate_word_by_word_captions(output_path)
-		
-		# Generate grouped captions with highlighting
-		output_path = "output_grouped_highlight_shorts.mp4"
-		caption_generator.generate_grouped_captions_with_highlight(
-			output_path
-		)
+	with CaptionCreator(video_path, custom_config) as caption_generator:
+		caption_generator.generate()

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Tuple
+import common
 
 @dataclass
 class Config:
@@ -32,6 +33,10 @@ class Config:
     bg_color: str = "#6C5CE7"
     
     # --- Highlighting (for grouped) ---
+    highlight_text: bool = True
     highlight_text_color: str = "white"
     highlight_bg_color: str = "#FF6B6B"
     highlight_padding: Tuple[int, int] = (10, 5) # (horizontal, vertical)
+
+    # --- Output Path ---
+    output_path: str = f'output/{common.generate_random_string()}.mp4'
