@@ -1,4 +1,11 @@
-from moviepy import VideoFileClip, TextClip, CompositeVideoClip, ImageClip
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+import logging
+logging.getLogger().setLevel(logging.ERROR)
+
+import argparse
+from moviepy import VideoFileClip, CompositeVideoClip, ImageClip
 from moviepy.video.fx import FadeIn, FadeOut
 from stt.fasterwhispher import FasterWhispherSTTProcessor
 import common
@@ -297,12 +304,20 @@ class CaptionCreator:
 
 # Usage example
 if __name__ == "__main__":
-	video_path = "/home/jebineinstein/git/CaptionCreator/video/SvtTCBLqqZ.mp4"
+	"""Main entry point."""
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--input", required=True, help="Path to the input video")
+	parser.add_argument("--config_path", required=False, help="Path to configuration JSON")
+	args = parser.parse_args()
 
-	custom_config = Config()
-	custom_config.word_count = 1
-	custom_config.highlight_text = False
+	if args.config_path:
+		custom_config = Config.from_json(args.config_path)
+	else:
+		custom_config = Config()
+	# args.input = "SvtTCBLqqZ.mp4"
 
-	# Using context manager for automatic cleanup
-	with CaptionCreator(video_path, custom_config) as caption_generator:
-		caption_generator.generate()
+	if args.input:
+		with CaptionCreator(args.input, custom_config) as caption_generator:
+			caption_generator.generate()
+
+	else: logger_config.warning("Please provide input file using --input")

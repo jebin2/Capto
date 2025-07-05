@@ -1,6 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, fields
 from typing import List, Tuple
 import common
+import json
 
 @dataclass
 class Config:
@@ -36,7 +37,31 @@ class Config:
     highlight_text: bool = True
     highlight_text_color: str = "white"
     highlight_bg_color: str = "#FF6B6B"
-    highlight_padding: Tuple[int, int] = (10, 5) # (horizontal, vertical)
+    highlight_padding: Tuple[int, int] = (10, 5)  # (horizontal, vertical)
 
     # --- Output Path ---
     output_path: str = f'output/{common.generate_random_string()}.mp4'
+
+    @staticmethod
+    def from_json(json_path: str) -> "Config":
+        """Load Config from JSON, merging with defaults."""
+        with open(json_path, "r") as f:
+            json_data = json.load(f)
+
+        # Get default config as dict
+        default_values = asdict(Config())
+
+        # Filter json_data to only keys present in Config fields
+        field_names = {f.name for f in fields(Config)}
+        filtered_data = {k: v for k, v in json_data.items() if k in field_names}
+
+        # Merge filtered JSON data into defaults
+        merged = {**default_values, **filtered_data}
+
+        return Config(**merged)
+
+    def to_json(self, json_path: str, indent: int = 4) -> None:
+        """Export current Config instance to a JSON file."""
+        with open(json_path, "w") as f:
+            json.dump(asdict(self), f, indent=indent)
+        print(f"✅ Config saved to {json_path}")
