@@ -98,22 +98,22 @@ class CaptionCreator:
 		
 		return start_time, end_time, duration
 	
-	def _create_text_clip(self, 
-						  words_data: List[Dict], 
-						  highlight_word_index: int, 
-						  start_time: float, 
-						  duration: float,
-						  group_start_index: int = 0) -> ImageClip:
+	def _create_text_clip(self,
+						words_data: List[Dict],
+						highlight_word_index: int,
+						start_time: float,
+						duration: float,
+						group_start_index: int = 0) -> ImageClip:
 		"""
 		Create a text clip with single word or grouped words and highlighting.
-		
+
 		Args:
 			words_data (List[Dict]): List of word data dictionaries
 			highlight_word_index (int): Index of the current word to highlight
 			start_time (float): When to start displaying
 			duration (float): How long to display
 			group_start_index (int): Starting index of the group (for grouped mode)
-			
+
 		Returns:
 			ImageClip: The text clip
 		"""
@@ -128,16 +128,18 @@ class CaptionCreator:
 				word_to_highlight = word
 			else:
 				caption_parts.append((word, self.config.text_color))
-		
+
 		# Load font
 		font = ImageFont.truetype(self.font_path, self.config.font_size)
-		
+
 		# Simulate layout to calculate required height
 		dummy_img = Image.new("RGBA", (caption_width, 10), (0, 0, 0, 0))
 		draw = ImageDraw.Draw(dummy_img)
-		space_bbox = draw.textbbox((0, 0), " ", font=font)
-		space_width = space_bbox[2] - space_bbox[0]
-		
+
+		# --- FIX 1: Use textlength for accurate space width ---
+		# This provides the advance width, which is better for layout than bbox.
+		space_width = draw.textlength(" ", font=font)
+
 		# Buffer lines and compute dimensions
 		lines = []
 		current_line = []
@@ -146,15 +148,20 @@ class CaptionCreator:
 		total_height = 0
 
 		for word, color in caption_parts:
+			# --- FIX 2: Use textlength for word width ---
+			# This ensures layout is based on advance width, not just ink area.
+			word_width = draw.textlength(word, font=font)
+			
+			# We still need textbbox to get the actual height of the word
 			bbox = draw.textbbox((0, 0), word, font=font)
-			word_width = bbox[2] - bbox[0]
 			word_height = bbox[3] - bbox[1]
 			max_line_height = max(max_line_height, word_height)
 
 			if current_line_width + word_width > caption_width:
-				# Commit current line
-				lines.append((current_line, current_line_width, max_line_height))
-				total_height += max_line_height + self.config.line_spacing
+				# Commit current line, removing trailing space width for accurate centering
+				if current_line:
+					lines.append((current_line, current_line_width - space_width, max_line_height))
+					total_height += max_line_height + self.config.line_spacing
 				# Start new line
 				current_line = []
 				current_line_width = 0
@@ -164,7 +171,8 @@ class CaptionCreator:
 			current_line_width += word_width + space_width
 
 		if current_line:
-			lines.append((current_line, current_line_width, max_line_height))
+			# Commit the last line, also removing the trailing space width
+			lines.append((current_line, current_line_width - space_width, max_line_height))
 			total_height += max_line_height + self.config.line_spacing
 
 		# Add extra padding for descenders
@@ -180,23 +188,28 @@ class CaptionCreator:
 		for line_words, line_width, line_height in lines:
 			# Center align based on horizontal_align config
 			if self.config.horizontal_align == "center":
-				x = (caption_width - line_width) // 2
+				x = (caption_width - line_width) / 2
 			elif self.config.horizontal_align == "left":
 				x = 0
 			else:  # right
 				x = caption_width - line_width
-				
+
 			for word, color, word_width in line_words:
 				# Draw background highlight if this is the word to highlight
 				if word_to_highlight == word:
 					padding_x, padding_y = self.config.highlight_padding
+
+					# --- FIX 3: Calculate highlight box based on layout position (x) and width ---
+					# This ensures the highlight padding is symmetrical around the word's allocated space.
 					
-					# Use textbbox for accurate positioning
+					# Use textbbox only for accurate *vertical* positioning
 					text_bbox = draw.textbbox((x, y), word, font=font)
-					rect_x0 = text_bbox[0] - padding_x
 					rect_y0 = text_bbox[1] - padding_y
-					rect_x1 = text_bbox[2] + padding_x
 					rect_y1 = text_bbox[3] + padding_y
+
+					# Use the layout's x and word_width for horizontal bounds
+					rect_x0 = x - padding_x
+					rect_x1 = x + word_width + padding_x
 
 					# Draw background rectangle
 					draw.rectangle(
@@ -220,17 +233,17 @@ class CaptionCreator:
 		txt_clip = ImageClip(np.array(img)).with_duration(duration).with_start(start_time)
 
 		txt_clip = txt_clip.with_position((self.config.vertical_align, self.config.horizontal_align))
-		
+
 		# Apply animations for single word mode
 		if self.config.use_fade_and_scale:
 			fade_duration = min(self.config.fade_duration, duration * 0.3)
-			
+
 			# Apply scaling effect
 			txt_clip = txt_clip.resized(lambda t: max(0.1, 1 + self.config.scale_effect_intensity * (1 - abs(t - duration / 2) / max(0.1, duration / 2))))
-			
+
 			# Apply fade effects
 			txt_clip = txt_clip.with_effects([FadeIn(fade_duration), FadeOut(fade_duration)])
-		
+
 		return txt_clip
 	
 	def generate(self) -> str:

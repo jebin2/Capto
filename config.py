@@ -8,10 +8,10 @@ class Config:
     """A single configuration class to style captions."""
 
     # --- Font and Color ---
-    font_path: List[str] = field(default_factory=lambda: ["Fonts/font_1.ttf"])
+    font_path: List[str] = field(default_factory=lambda: ["Fonts/font_1.ttf", "Fonts/font_2.ttf"])
     color_palette: List[str] = field(default_factory=lambda: [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4",
-        "#DDA0DD", "#FF9F43", "#6C5CE7", "#A8E6CF", "#FFB6C1"
+        "#FF6B6B", "#4ECDC4", "#2AA0BB", "#36AF77",
+        "#C565C5", "#58310B", "#6C5CE7", "#1C533F", "#BB394C"
     ])
 
     # --- General Text Properties ---

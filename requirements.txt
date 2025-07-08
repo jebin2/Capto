@@ -1,3 +1,8 @@
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+websockets
 moviepy
 pillow
 git+https://github.com/jebin2/STT.git#egg=stt-runner[fasterwhisper]
