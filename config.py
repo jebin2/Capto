@@ -4,18 +4,26 @@ import common
 import json
 
 @dataclass
+class WordTimestamp:
+    word: str
+    start_offset: int
+    end_offset: int
+    start: float
+    end: float
+
+@dataclass
 class Config:
     """A single configuration class to style captions."""
 
     # --- Font and Color ---
-    font_path: List[str] = field(default_factory=lambda: ["Fonts/font_1.ttf", "Fonts/font_2.ttf"])
+    font_path: List[str] = field(default_factory=lambda: ["Fonts/font_1.ttf"])
     color_palette: List[str] = field(default_factory=lambda: [
-        "#FF6B6B", "#4ECDC4", "#2AA0BB", "#36AF77",
+        "#E74747", "#FF6B6B", "#4ECDC4", "#2AA0BB", "#36AF77",
         "#C565C5", "#58310B", "#6C5CE7", "#1C533F", "#BB394C"
     ])
 
     # --- General Text Properties ---
-    font_size: int = 100
+    font_size: int = 70
     text_color: str = "white"
     stroke_color: str = "black"
     stroke_width: int = 3
@@ -36,10 +44,11 @@ class Config:
     # --- Highlighting (for grouped) ---
     highlight_text: bool = True
     highlight_text_color: str = "white"
-    highlight_bg_color: str = "#FF6B6B"
+    highlight_bg_color: str = "#5846DD"
     highlight_padding: Tuple[int, int] = (10, 5)  # (horizontal, vertical)
 
     # --- Output Path ---
+    word_timestamps: List[WordTimestamp] = field(default_factory=list)
     output_path: str = f'output/{common.generate_random_string()}.mp4'
 
     @staticmethod

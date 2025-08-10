@@ -44,15 +44,16 @@ class CaptionCreator:
 		self.font_path = os.path.abspath(chosen_font)
 		logger_config.info(f"Using font: {os.path.basename(self.font_path)}")
 		self.video = None
-		self.word_timestamps = []
+		self.word_timestamps = self.config.word_timestamps
 		self._load_video_data()
 	
 	def _load_video_data(self) -> None:
 		"""Load video file and extract word timestamps."""
 		try:
 			self.video = VideoFileClip(self.video_path)
-			with FasterWhispherSTTProcessor() as STT:
-				self.word_timestamps = STT.transcribe({"model": "fasterwhispher", "input": self.video_path})["segments"]["word"]
+			if not self.word_timestamps:
+				with FasterWhispherSTTProcessor() as STT:
+					self.word_timestamps = STT.transcribe({"model": "fasterwhispher", "input": self.video_path})["segments"]["word"]
 			
 			logger_config.info(f"Video loaded successfully")
 			logger_config.info(f"Video duration: {self.video.duration:.2f} seconds")
@@ -212,9 +213,14 @@ class CaptionCreator:
 					rect_x1 = x + word_width + padding_x
 
 					# Draw background rectangle
-					draw.rectangle(
+					# draw.rectangle(
+					# 	[rect_x0, rect_y0, rect_x1, rect_y1],
+					# 	fill=self.config.highlight_bg_color
+					# )
+					draw.rounded_rectangle(
 						[rect_x0, rect_y0, rect_x1, rect_y1],
-						fill=self.config.highlight_bg_color
+						fill=self.config.highlight_bg_color,
+						radius=15,  # border radius in pixels
 					)
 
 				# Draw stroke (outline) around text
@@ -232,7 +238,7 @@ class CaptionCreator:
 		# Convert PIL image to MoviePy ImageClip
 		txt_clip = ImageClip(np.array(img)).with_duration(duration).with_start(start_time)
 
-		txt_clip = txt_clip.with_position((self.config.vertical_align, self.config.horizontal_align))
+		txt_clip = txt_clip.with_position((self.config.horizontal_align, self.config.vertical_align))
 
 		# Apply animations for single word mode
 		if self.config.use_fade_and_scale:
