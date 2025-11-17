@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field, asdict, fields
-from typing import List, Tuple
-import common
+from typing import List, Tuple, Literal
+import utils
 import json
+import constants
 
 @dataclass
 class WordTimestamp:
@@ -23,17 +24,28 @@ class Config:
     ])
 
     # --- General Text Properties ---
-    font_size: int = 70
+    font_size: int = 40
     text_color: str = "white"
     stroke_color: str = "black"
     stroke_width: int = 3
     vertical_align: str = "center"
     horizontal_align: str = "center"
+
+    # --- Positioning ---
+    use_safe_zones: bool = False
+    vertical_position: Literal["top", "center", "bottom"] = "bottom"
+    safe_zone_padding: int = 20
     
     # --- Animation (for word-by-word) ---
     use_fade_and_scale: bool = True
     fade_duration: float = 0.2
     scale_effect_intensity: float = 0.15
+
+    # --- Zoom Animation ---
+    use_zoom_animation: bool = False
+    zoom_start_scale: float = 0.8
+    zoom_end_scale: float = 1.0
+    zoom_duration: float = 0.3
 
     # --- Text Properties ---
     word_count: int = 4
@@ -47,9 +59,17 @@ class Config:
     highlight_bg_color: str = "#5846DD"
     highlight_padding: Tuple[int, int] = (10, 5)  # (horizontal, vertical)
 
+
+    # --- Aspect Ratio Validation ---
+    auto_crop_to_9_16: bool = False
+    enforce_9_16: bool = False
+    fit_method: Literal["crop", "pad"] = "pad"
+    reject_invalid_aspect: bool = False
+    padding_color: Tuple[int, int, int] = (0, 0, 0)
+
     # --- Output Path ---
     word_timestamps: List[WordTimestamp] = field(default_factory=list)
-    output_path: str = f'output/{common.generate_random_string()}.mp4'
+    output_path: str = f'{constants.OUTPUT_FOLDER}/{utils.generate_random_string()}.mp4'
 
     @staticmethod
     def from_json(json_path: str) -> "Config":
