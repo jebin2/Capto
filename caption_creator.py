@@ -219,7 +219,8 @@ class CaptionCreator:
 						highlight_word_index: int,
 						start_time: float,
 						duration: float,
-						group_start_index: int = 0) -> ImageClip:
+						group_start_index: int = 0,
+						is_first_word_in_group: bool = False) -> ImageClip:
 		caption_width = int(self.video.size[0] * self.config.caption_width_ratio)
 
 		caption_parts = []
@@ -331,7 +332,7 @@ class CaptionCreator:
 				(self.config.horizontal_align, self.config.vertical_align)
 			)
 
-		if self.config.use_zoom_animation:
+		if self.config.use_zoom_animation and is_first_word_in_group:
 			txt_clip = utils.apply_zoom_animation(
 				txt_clip,
 				start_scale=self.config.zoom_start_scale,
@@ -377,12 +378,14 @@ class CaptionCreator:
 				if duration <= 0:
 					continue
 				
+				is_first_word = (i == group_start_index)
 				txt_clip = self._create_text_clip(
 					words_data=group_words_data,
 					highlight_word_index=i if self.config.highlight_text else -1,
 					start_time=start_time,
 					duration=duration,
-					group_start_index=group_start_index
+					group_start_index=group_start_index,
+					is_first_word_in_group=is_first_word
 				)
 				
 				text_clips.append(txt_clip)

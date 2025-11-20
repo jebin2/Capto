@@ -24,7 +24,7 @@ class Config:
     ])
 
     # --- General Text Properties ---
-    font_size: int = 40
+    font_size: int = 80
     text_color: str = "white"
     stroke_color: str = "black"
     stroke_width: int = 3
