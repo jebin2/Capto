@@ -45,43 +45,47 @@ class CaptionCreator:
 		if video_path:
 			self.video_path = os.path.abspath(video_path)
 
-			if self.config.enforce_9_16:
-				width, height = AspectRatioValidator.get_video_dimensions(self.video_path)
-				is_valid, actual_ratio, orientation = AspectRatioValidator.check_aspect_ratio(
-					width, height
-				)
-				
-				logger_config.info(
-					f"Video dimensions: {width}x{height} "
-					f"({orientation}, ratio: {actual_ratio:.4f})"
-				)
-				
-				if not is_valid:
-					target_ratio = AspectRatioValidator.TARGET_ASPECT
-					logger_config.warning(
-						f"Video is not 9:16! Current: {actual_ratio:.4f}, "
-						f"Target: {target_ratio:.4f}"
+			if self.config.keep_original_aspect:
+				logger_config.info("Skipping aspect ratio validation (keep original aspect).")
+				self.needs_crop = False
+			else:
+				if self.config.enforce_9_16:
+					width, height = AspectRatioValidator.get_video_dimensions(self.video_path)
+					is_valid, actual_ratio, orientation = AspectRatioValidator.check_aspect_ratio(
+						width, height
 					)
 					
-					if self.config.reject_invalid_aspect:
-						raise ValueError(
-							f"Video must be 9:16 aspect ratio. "
-							f"Current: {width}x{height} ({actual_ratio:.4f})"
-						)
+					logger_config.info(
+						f"Video dimensions: {width}x{height} "
+						f"({orientation}, ratio: {actual_ratio:.4f})"
+					)
 					
-					if self.config.auto_crop_to_9_16:
-						logger_config.info("Auto-cropping to 9:16...")
-						self.needs_crop = True
-					else:
+					if not is_valid:
+						target_ratio = AspectRatioValidator.TARGET_ASPECT
 						logger_config.warning(
-							"Video will be processed as-is (auto_crop disabled)"
+							f"Video is not 9:16! Current: {actual_ratio:.4f}, "
+							f"Target: {target_ratio:.4f}"
 						)
+						
+						if self.config.reject_invalid_aspect:
+							raise ValueError(
+								f"Video must be 9:16 aspect ratio. "
+								f"Current: {width}x{height} ({actual_ratio:.4f})"
+							)
+						
+						if self.config.auto_crop_to_9_16:
+							logger_config.info("Auto-cropping to 9:16...")
+							self.needs_crop = True
+						else:
+							logger_config.warning(
+								"Video will be processed as-is (auto_crop disabled)"
+							)
+							self.needs_crop = False
+					else:
+						logger_config.success(f"✓ Video is 9:16 aspect ratio")
 						self.needs_crop = False
 				else:
-					logger_config.success(f"✓ Video is 9:16 aspect ratio")
 					self.needs_crop = False
-			else:
-				self.needs_crop = False
 
 			self._load_video_data()
 
@@ -148,29 +152,34 @@ class CaptionCreator:
 			
 			logger_config.info(f"Original video: {original_size[0]}x{original_size[1]}")
 
-			if self.needs_crop:
-				logger_config.info("Cropping to 9:16 (center crop)...")
-				self.video = AspectRatioValidator.crop_to_9_16(self.video)
-				logger_config.success(
-					f"✓ Cropped to {self.video.size[0]}x{self.video.size[1]}"
-				)
+			# NEW: skip aspect ratio enforcement fully
+			if self.config.keep_original_aspect:
+				logger_config.info("⚠️ Skipping aspect ratio enforcement. Keeping video as-is.")
+				# Do nothing — keep original video dimensions
 			else:
-				current_w, current_h = self.video.size
-				x1, y1, x2, y2 = AspectRatioValidator.calculate_crop_dimensions(
-					current_w, current_h
-				)
-				target_w, target_h = x2 - x1, y2 - y1
-				logger_config.info(f"Padding to {target_w}x{target_h} with bars...")
+				if self.needs_crop:
+					logger_config.info("Cropping to 9:16 (center crop)...")
+					self.video = AspectRatioValidator.crop_to_9_16(self.video)
+					logger_config.success(
+						f"✓ Cropped to {self.video.size[0]}x{self.video.size[1]}"
+					)
+				else:
+					current_w, current_h = self.video.size
+					x1, y1, x2, y2 = AspectRatioValidator.calculate_crop_dimensions(
+						current_w, current_h
+					)
+					target_w, target_h = x2 - x1, y2 - y1
+					logger_config.info(f"Padding to {target_w}x{target_h} with bars...")
 
-				self.video = AspectRatioValidator.resize_and_pad_to_9_16(
-					self.video,
-					target_width=target_w,
-					target_height=target_h,
-					bg_color=self.config.padding_color
-				)
-				logger_config.success(
-					f"✓ Padded to {self.video.size[0]}x{self.video.size[1]}"
-				)
+					self.video = AspectRatioValidator.resize_and_pad_to_9_16(
+						self.video,
+						target_width=target_w,
+						target_height=target_h,
+						bg_color=self.config.padding_color
+					)
+					logger_config.success(
+						f"✓ Padded to {self.video.size[0]}x{self.video.size[1]}"
+					)
 
 			if not self.word_timestamps:
 				with FasterWhispherSTTProcessor() as STT:

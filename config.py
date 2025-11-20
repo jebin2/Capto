@@ -30,6 +30,7 @@ class Config:
     stroke_width: int = 3
     vertical_align: str = "center"
     horizontal_align: str = "center"
+    keep_original_aspect: bool = True
 
     # --- Positioning ---
     use_safe_zones: bool = False
