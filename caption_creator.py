@@ -404,7 +404,7 @@ class CaptionCreator:
 					f"⚠️ Final video size {w}x{h} is not divisible by 2. "
 					f"Resizing to {new_w}x{new_h} to satisfy H.264."
 				)
-				final_clip = final_clip.resized((new_w, new_h))
+				final_clip = final_clip.resize((new_w, new_h))
 			utils.write_videofile(final_clip, self.config.output_path, fps=self.fps)
 			final_clip.close()
 			
