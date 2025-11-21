@@ -1,5 +1,5 @@
-from moviepy import ColorClip, CompositeVideoClip
-from moviepy.video.fx import Crop
+from moviepy.editor import ColorClip, CompositeVideoClip
+from moviepy.video.fx.crop import crop
 import subprocess
 import json
 
@@ -72,9 +72,7 @@ class AspectRatioValidator:
         width, height = video_clip.size
         x1, y1, x2, y2 = AspectRatioValidator.calculate_crop_dimensions(width, height)
 
-        cropped = video_clip.with_effects([
-            Crop(x1=x1, y1=y1, x2=x2, y2=y2)
-        ])
+        cropped = crop(video_clip, x1=x1, y1=y1, x2=x2, y2=y2)
         
         return cropped
     
@@ -105,7 +103,7 @@ class AspectRatioValidator:
             duration=video_clip.duration
         )
 
-        resized_video = resized_video.with_position((x_offset, y_offset))
+        resized_video = resized_video.set_position((x_offset, y_offset))
 
         final_video = CompositeVideoClip([background, resized_video])
         

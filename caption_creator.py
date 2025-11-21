@@ -5,8 +5,9 @@ import logging
 logging.getLogger().setLevel(logging.ERROR)
 
 import argparse
-from moviepy import VideoFileClip, CompositeVideoClip, ImageClip
-from moviepy.video.fx import FadeIn, FadeOut
+from moviepy.editor import VideoFileClip, CompositeVideoClip, ImageClip
+from moviepy.video.fx.fadein import fadein
+from moviepy.video.fx.fadeout import fadeout
 from stt.fasterwhispher import FasterWhispherSTTProcessor
 import utils
 from custom_logger import logger_config
@@ -314,7 +315,7 @@ class CaptionCreator:
 
 			y += line_height + self.config.line_spacing
 
-		txt_clip = ImageClip(np.array(img)).with_duration(duration).with_start(start_time)
+		txt_clip = ImageClip(np.array(img)).set_duration(duration).set_start(start_time)
 
 		if self.config.use_safe_zones:
 			from safe_zone import SafeZone
@@ -326,9 +327,9 @@ class CaptionCreator:
 				position=self.config.vertical_position,
 				padding=self.config.safe_zone_padding
 			)
-			txt_clip = txt_clip.with_position((self.config.horizontal_align, y_pos))
+			txt_clip = txt_clip.set_position((self.config.horizontal_align, y_pos))
 		else:
-			txt_clip = txt_clip.with_position(
+			txt_clip = txt_clip.set_position(
 				(self.config.horizontal_align, self.config.vertical_align)
 			)
 
@@ -344,10 +345,11 @@ class CaptionCreator:
 			fade_duration = min(self.config.fade_duration, duration * 0.3)
 
 			# Apply scaling effect
-			txt_clip = txt_clip.resized(lambda t: max(0.1, 1 + self.config.scale_effect_intensity * (1 - abs(t - duration / 2) / max(0.1, duration / 2))))
+			txt_clip = txt_clip.resize(lambda t: max(0.1, 1 + self.config.scale_effect_intensity * (1 - abs(t - duration / 2) / max(0.1, duration / 2))))
 
 			# Apply fade effects
-			txt_clip = txt_clip.with_effects([FadeIn(fade_duration), FadeOut(fade_duration)])
+			txt_clip = fadein(txt_clip, fade_duration)
+			txt_clip = fadein(txt_clip, fade_duration)
 
 		return txt_clip
 	

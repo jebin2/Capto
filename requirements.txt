@@ -3,7 +3,7 @@ uvicorn[standard]
 python-multipart
 jinja2
 websockets
-moviepy
+moviepy==1.0.3
 pillow
 git+https://github.com/jebin2/STT.git#egg=stt-runner[fasterwhisper]
 git+https://github.com/jebin2/custom_logger.git
