@@ -101,7 +101,7 @@ def apply_zoom_animation(clip, start_scale=0.8, end_scale=1.0, duration=0.3):
             return start_scale + (end_scale - start_scale) * eased
         return end_scale
     
-    return clip.resized(scale_function)
+    return clip.resize(scale_function)
 
 def check_if_vfr(video_path):
     try:

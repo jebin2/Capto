@@ -95,7 +95,7 @@ class AspectRatioValidator:
             x_offset = (target_width - new_width) // 2
             y_offset = 0
 
-        resized_video = video_clip.resized((new_width, new_height))
+        resized_video = video_clip.resize((new_width, new_height))
 
         background = ColorClip(
             size=(target_width, target_height),
