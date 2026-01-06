@@ -18,6 +18,31 @@ def list_files_recursive(directory):
     
     return file_list
 
+def check_vaapi_available():
+    """
+    Check if VAAPI hardware acceleration is available.
+    Returns True if VAAPI device exists and encoder is available.
+    """
+    # Check if VAAPI device exists
+    vaapi_device = "/dev/dri/renderD128"
+    if not os.path.exists(vaapi_device):
+        return False
+    
+    # Check if hevc_vaapi encoder is available
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            capture_output=True, text=True, timeout=10
+        )
+        if "hevc_vaapi" in result.stdout:
+            # Force MoviePy to use the system installed FFmpeg (which has VAAPI support)
+            os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
+            return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    return False
+
 def remove_file(file_path, retry=True):
     try:
         if os.path.exists(file_path):
@@ -50,23 +75,42 @@ def generate_random_string(length=10):
     return random_string
 
 def write_videofile(video_clip, output_path, fps=constants.FPS):
-    video_clip.write_videofile(
-        output_path,
-        fps=fps,
-        codec='libx264',
-        preset='veryfast',
-        threads=os.cpu_count(),
-        ffmpeg_params=[
-            '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart',
-        ],
-        remove_temp=True,
-        # Optional
-        # temp_audiofile=audio_file,
-        # write_logfile=False,
-        # bitrate='8000k',
-        # audio_codec='aac',
-    )
+    use_vaapi = check_vaapi_available()
+    
+    if use_vaapi:
+        # Hardware Accelerated Encoding (VAAPI)
+        print("🚀 Using Intel VAAPI Hardware Acceleration")
+        video_clip.write_videofile(
+            output_path,
+            fps=fps,
+            codec='hevc_vaapi',
+            ffmpeg_params=[
+                '-init_hw_device', 'vaapi:/dev/dri/renderD128',
+                '-vf', 'format=nv12,hwupload',
+            ],
+            remove_temp=True,
+            threads=os.cpu_count()
+        )
+    else:
+        # Software Encoding (CPU)
+        print("🐢 Using CPU Software Encoding (libx264)")
+        video_clip.write_videofile(
+            output_path,
+            fps=fps,
+            codec='libx264',
+            preset='veryfast',
+            threads=os.cpu_count(),
+            ffmpeg_params=[
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+            ],
+            remove_temp=True,
+            # Optional
+            # temp_audiofile=audio_file,
+            # write_logfile=False,
+            # bitrate='8000k',
+            # audio_codec='aac',
+        )
 
 def get_video_fps(video_path):
     """Get the actual display frame rate (tbr) from video."""

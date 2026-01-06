@@ -106,20 +106,46 @@ class CaptionCreator:
 			
 			cfr_path = f'{constants.TEMP_OUTPUT}/cfr_{utils.generate_random_string()}.mp4'
 			
-			cmd = [
-				'ffmpeg', '-y',
-				'-i', input_path,
-				'-c:v', 'libx264',
-				'-preset', 'veryfast',
-				'-crf', '18',
+			use_vaapi = utils.check_vaapi_available()
+			
+			cmd = ['ffmpeg', '-y']
+			
+			if use_vaapi:
+				print("🚀 Converting to CFR with VAAPI...")
+				cmd.extend([
+					'-init_hw_device', 'vaapi=vdev:/dev/dri/renderD128',
+					'-filter_hw_device', 'vdev',
+					#'-hwaccel', 'vaapi', # Optional/Redundant if we just use hevc_vaapi, but good for decoding
+					'-i', input_path,
+					'-c:v', 'hevc_vaapi',
+					'-qp', '22', # Quality parameter for VAAPI
+				])
+			else:
+				print("🐢 Converting to CFR with CPU...")
+				cmd.extend([
+					'-i', input_path,
+					'-c:v', 'libx264',
+					'-preset', 'veryfast',
+					'-crf', '18',
+					'-pix_fmt', 'yuv420p',
+				])
+			
+			cmd.extend([
 				'-r', str(int(target_fps)),
 				'-vsync', 'cfr',
-				'-pix_fmt', 'yuv420p',
+			])
+			
+			if not use_vaapi:
+				# Only valid for software, though hevc_vaapi handles pix_fmt via hwupload usually or internal
+				# For safety, we keep pix_fmt specific to software above or ignore for VAAPI if it auto-chooses nv12
+				pass
+				
+			cmd.extend([
 				'-c:a', 'aac',
 				'-b:a', '192k',
 				'-movflags', '+faststart',
 				cfr_path
-			]
+			])
 			
 			result = subprocess.run(cmd, text=True)
 			
