@@ -15,6 +15,11 @@ from typing import List, Dict, Tuple, Optional
 import random
 import os
 from PIL import Image, ImageDraw, ImageFont
+
+# Monkeypatch for Pillow 10+ which removed ANTIALIAS
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.LANCZOS
+
 import numpy as np
 from config import Config
 import constants
