@@ -15,6 +15,7 @@ from typing import List, Dict, Tuple, Optional
 import random
 import os
 from PIL import Image, ImageDraw, ImageFont
+import common
 
 # Monkeypatch for Pillow 10+ which removed ANTIALIAS
 if not hasattr(Image, 'ANTIALIAS'):
@@ -121,7 +122,7 @@ class CaptionCreator:
 				cfr_path
 			]
 			
-			result = subprocess.run(cmd, text=True)
+			result = common.run_ffmpeg(cmd)
 			
 			if result.returncode != 0:
 				logger_config.error(f"FFmpeg conversion failed: {result.stderr}")

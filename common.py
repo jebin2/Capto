@@ -14,6 +14,7 @@ import re
 import ffmpeg
 import requests
 from PIL import Image, PngImagePlugin
+import psutil
 
 def path_exists(path):
     return file_exists(path) or dir_exists(path)
@@ -193,7 +194,7 @@ def write_videofile(video_clip, output_path, fps=24):
         codec='libx264',
         # audio_codec='aac',
         # preset='faster',  # Faster encoding, slightly larger file
-        threads=os.cpu_count(),  # Use all available CPU cores
+        threads = get_threads(),
         bitrate='8000k',  # Adjust based on your quality needs
         remove_temp=True,
         temp_audiofile=audio_file
@@ -205,7 +206,8 @@ def write_audiofile(audio_clip, output_path, fps=44100, codec="libmp3lame", bitr
         output_path,
         fps=fps,
         codec=codec,
-        bitrate=bitrate
+        bitrate=bitrate,
+        threads = get_threads()
     )
 
 def download_image(image_url, save_path, throw_error=False):
@@ -256,3 +258,17 @@ def is_server_alive(url):
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
+
+def get_threads():
+    return len(psutil.Process().cpu_affinity())
+
+def run_ffmpeg(cmd):
+    threads = get_threads()
+    cmd = [
+        "taskset", "-c", "2,3",
+        "nice", "-n", "15",
+        "ffmpeg",
+        "-threads", str(threads)
+    ] + cmd[1:]
+    logger_config.debug(f"Running command: {' '.join(cmd)}")
+    return subprocess.run(cmd, capture_output=True, text=True, check=True)

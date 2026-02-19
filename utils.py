@@ -7,6 +7,7 @@ import string
 from custom_logger import logger_config
 import constants
 import secrets
+import common
 
 def list_files_recursive(directory):
     file_list = []
@@ -55,7 +56,7 @@ def write_videofile(video_clip, output_path, fps=constants.FPS):
         fps=fps,
         codec='libx264',
         preset='veryfast',
-        threads=os.cpu_count(),
+        threads = common.get_threads(),
         ffmpeg_params=[
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart',
