@@ -206,8 +206,7 @@ def write_audiofile(audio_clip, output_path, fps=44100, codec="libmp3lame", bitr
         output_path,
         fps=fps,
         codec=codec,
-        bitrate=bitrate,
-        threads = get_threads()
+        bitrate=bitrate
     )
 
 def download_image(image_url, save_path, throw_error=False):
